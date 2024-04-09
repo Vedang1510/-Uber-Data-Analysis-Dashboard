@@ -1,0 +1,155 @@
+---
+title: "Uber Data Analysis Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    theme: yeti
+---
+
+```{r setup, include=FALSE}
+#importing Libraries
+library(flexdashboard)
+library(tidyverse)
+library(highcharter)
+library(gt)
+library(htmltools)
+library(viridis)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+#import dataset
+apr <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-apr14.csv")
+may <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-may14.csv")
+june <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-jun14.csv")
+july <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-jul14.csv")
+aug <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-aug14.csv")
+sept <- read.csv("E:/College/sem-6/bda/PBL/uber data anlysis/uber-raw-data-sep14.csv")
+```
+
+```{r}
+# Combine the data together 
+data <- rbind(apr, may, june, july, aug, sept)
+cat("The dimensions of the data are:", dim(data))
+
+data$Date.Time <- as.POSIXct(data$Date.Time, format="%m/%d/%Y %H:%M:%S")
+data$Time <- format(as.POSIXct(data$Date.Time, format = "%m/%d/%Y %H:%M:%S"), format="%H:%M:%S")
+data$Date.Time <- ymd_hms(data$Date.Time)
+
+# Create individual columns for month day and year
+data$day <- factor(day(data$Date.Time))
+data$month <- factor(month(data$Date.Time, label=TRUE))
+data$year <- factor(year(data$Date.Time))
+data$dayofweek <- factor(wday(data$Date.Time, label=TRUE))
+
+# Add Time variables as well 
+data$second = factor(second(hms(data$Time)))
+data$minute = factor(minute(hms(data$Time)))
+data$hour = factor(hour(hms(data$Time)))
+```
+Uber Data Analysis {data-orientation=rows}
+==========================================================================
+## Row 1 {data-height=100}
+
+Column {.tabset .tabset-fade data-width=650}
+-----------------------------------------------------------------------
+
+###    Bar graph {data-height=600}
+
+```{r}
+# Colors
+custom_colors <- viridis::mako(n = 24)
+
+# Plot for trips by hour
+data %>%
+  group_by(hour) %>%
+  summarise(Trips = n()) %>%
+  ggplot(aes(x = hour, y = Trips, fill = hour)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = custom_colors) +
+  ggtitle("Trips by Hour") +
+  labs(x = "Hour of the Day", y = "Number of Trips") +
+  theme_minimal()
+```
+
+### Scatter Plot {data-height=600}
+
+```{r fig.height=5}
+# Colors
+custom_colors <- viridis::mako(n = 7)
+
+month_data <- data %>%
+  group_by(month) %>%
+  summarise(Total = n())
+
+#Scatter plot for trips by months
+ggplot(month_data, aes(x = month, y = Total)) +
+  geom_point(color = custom_colors, size = 3) +  # Customize point color and size
+  labs(title = "Trips by Month",
+       x = "Month",
+       y = "Trips") +
+  theme_minimal()
+```
+
+### Box Plot {data-height=600}
+
+```{r fig.height=5}
+# Custom color scale
+custom_colors <- viridis::mako(7)
+
+day_month_data <- data %>% group_by(dayofweek, month) %>% summarize(Trips = n(), .groups = "drop")
+
+# Create boxplot of trips by day of the week
+ggplot(day_month_data, aes(x = dayofweek, y = Trips, fill = as.numeric(month))) +
+  geom_boxplot() +
+  scale_fill_viridis_c(option = "mako") +  # Use Viridis color scale
+  labs(title = "Trips by Day of the Week and Month",
+       x = "Day of the Week",
+       y = "Total Trips",
+       fill = "Month") +
+  theme_minimal()
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Pi chart{.no-padding}
+
+```{r}
+# Calculate total trips by month
+month_total <- day_month_data %>%
+  group_by(month) %>%
+  summarise(TotalTrips = sum(Trips))
+
+# Specify colors
+my_colors <- c("#CC1011", "#665555", "#05a399", "#cfcaca", "#f5e840", "#0683c9")
+
+# Create pie chart
+hchart(month_total, "pie", hcaes(x = month, y = TotalTrips),
+       color=my_colors) %>%
+  hc_title(text = "Total Trips by Month") %>%
+  hc_subtitle(text = "Distribution of Trips across Months")
+```
+
+### Histogram
+
+```{r}
+# Calculate total trips by month and day of the week
+month_dayofweek_data <- data %>%
+  mutate(weekday = weekdays(Date.Time)) %>%
+  mutate(week = format(Date.Time, "%W")) %>%
+  group_by(month, weekday, week) %>%
+  summarise(Trips = n())
+
+# Create histogram
+ggplot(month_dayofweek_data, aes(x = month, y = Trips, fill = weekday)) +
+  geom_histogram(stat = "identity", position = "stack") +
+  labs(title = "Weekly Trips by Month",
+       x = "Month",
+       y = "Total Trips",
+       fill = "Day of the Week") +
+  theme_minimal()
+```
+
